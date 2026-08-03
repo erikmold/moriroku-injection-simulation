@@ -1,0 +1,1650 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulasi Injection Molding Pro 3D</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Three.js & Loaders (STLLoader & OBJLoader) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #e2e8f0;
+            margin: 0;
+            overflow: hidden; 
+        }
+        
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        .tab-btn { border-bottom: 2px solid transparent; color: #94a3b8; }
+        .tab-btn:hover { color: #e2e8f0; }
+        .tab-btn.active { border-bottom: 2px solid #3b82f6; color: #60a5fa; background-color: rgba(59, 130, 246, 0.1); }
+
+        /* Matriks Input Style Ala Mesin Controller */
+        .matrix-table { w-full; border-collapse: collapse; }
+        .matrix-table th { background: #1e293b; color: #cbd5e1; font-size: 10px; font-weight: bold; padding: 6px; border: 1px solid #334155; text-align: center; }
+        .matrix-table td { padding: 4px; border: 1px solid #334155; background: #0f172a; }
+        .matrix-table input { width: 100%; background: transparent; border: none; color: #60a5fa; font-family: 'JetBrains Mono', monospace; font-size: 12px; text-align: center; font-weight: bold; outline: none; }
+        .matrix-table input:focus { background: #1e293b; color: #fff; }
+
+        .input-group label { display: block; font-size: 10px; color: #94a3b8; margin-bottom: 2px; font-weight: bold; text-transform: uppercase; }
+        .input-group select, .input-group input:not(.matrix-table input) { width: 100%; background-color: #1e293b; border: 1px solid #334155; color: #f8fafc; padding: 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+        .input-group select:focus, .input-group input:not(.matrix-table input):focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6; }
+
+        .mieruka-ok { border-left: 4px solid #10b981; background-color: rgba(16, 185, 129, 0.1); }
+        .mieruka-warn { border-left: 4px solid #f59e0b; background-color: rgba(245, 158, 11, 0.1); }
+        .mieruka-ng { border-left: 4px solid #ef4444; background-color: rgba(239, 68, 68, 0.1); }
+
+        .glass-panel { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        
+        #drawingOverlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 23, 42, 0.95); border: 2px dashed #475569; border-radius: 0.5rem; z-index: 100; display: none; cursor: crosshair; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+
+    <header class="bg-slate-900 border-b border-slate-700 p-3 flex justify-between items-center shadow-lg shrink-0 relative z-50">
+        <div class="flex items-center gap-4">
+            <!-- Logo Moriroku (Menggunakan mix-blend-screen agar background hitam JPG menjadi transparan menyatu dengan tema) -->
+            <img src="WhatsApp Image 2025-12-31 at 09.45.05.jpeg" alt="Moriroku Logo" class="h-10 w-auto object-contain mix-blend-screen" onerror="this.onerror=null; this.src='https://placehold.co/100x40/0f172a/3b82f6?text=MORIROKU';">
+            
+            <div class="border-l border-slate-700 pl-3">
+                <h1 class="text-lg font-bold leading-tight"><span class="text-blue-400">MORIROKU</span> IM Simulator Pro 3D</h1>
+                <p class="text-[10px] text-slate-400">Advanced Injection Molding & 3D Flow Simulation</p>
+            </div>
+        </div>
+        
+        <div class="flex items-center gap-4">
+            <div class="flex bg-slate-800 rounded-lg p-1 border border-slate-700">
+                <button onclick="toggleView('param')" id="btnViewParam" class="px-4 py-1.5 rounded text-xs font-bold bg-blue-600 text-white shadow">Parameter Setup</button>
+                <button onclick="toggleView('flow')" id="btnViewFlow" class="px-4 py-1.5 rounded text-xs font-bold text-slate-400 hover:text-white transition-colors">3D Flow Dashboard <i class="fas fa-cube ml-1"></i></button>
+            </div>
+
+            <div class="h-8 w-px bg-slate-700"></div>
+
+            <div class="bg-slate-950 border border-slate-800 px-3 py-1 rounded flex items-center gap-2 shadow-inner">
+                <i class="fas fa-microchip text-slate-500 text-xs"></i>
+                <div class="text-right">
+                    <p class="text-[9px] text-slate-400 uppercase tracking-wider">Total Shots</p>
+                    <p id="shotCounter" class="text-base font-mono font-bold text-blue-400 leading-none">0</p>
+                </div>
+            </div>
+            <button onclick="runSimulation()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded shadow-[0_0_15px_rgba(59,130,246,0.5)] transition-all active:scale-95 flex items-center gap-2 text-sm uppercase tracking-wider border border-blue-400">
+                <i class="fas fa-bolt"></i> Simulasikan
+            </button>
+        </div>
+    </header>
+
+    <main id="paramView" class="flex-1 flex overflow-hidden w-full transition-all duration-500">
+        <!-- Panel Kiri: Inputs -->
+        <aside class="w-full lg:w-8/12 flex flex-col bg-slate-800 border-r border-slate-700 shadow-xl relative z-10">
+            
+            <div class="flex overflow-x-auto bg-slate-950 shrink-0 custom-scrollbar border-b border-slate-700">
+                <button onclick="switchTab('tab-material')" class="tab-btn active whitespace-nowrap px-4 py-3 text-xs font-bold uppercase transition-colors"><i class="fas fa-cubes mr-1"></i> 1. Mat & Mold</button>
+                <button onclick="switchTab('tab-temp')" class="tab-btn whitespace-nowrap px-4 py-3 text-xs font-bold uppercase transition-colors"><i class="fas fa-thermometer-half mr-1"></i> 2. Temperatures</button>
+                <button onclick="switchTab('tab-inject')" class="tab-btn whitespace-nowrap px-4 py-3 text-xs font-bold uppercase transition-colors"><i class="fas fa-tachometer-alt mr-1"></i> 3. Inj & Hold</button>
+                <button onclick="switchTab('tab-timer')" class="tab-btn whitespace-nowrap px-4 py-3 text-xs font-bold uppercase transition-colors"><i class="fas fa-stopwatch mr-1"></i> 4. Recov & Timers</button>
+            </div>
+
+            <!-- Tab Contents -->
+            <div class="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-5">
+                
+                <!-- TAB 1: Material & Mold -->
+                <div id="tab-material" class="tab-content block animate-fade-in">
+                    <div class="grid grid-cols-2 gap-6">
+                        <div>
+                            <h2 class="text-xs font-bold text-blue-400 mb-3 border-b border-slate-700 pb-2">Material Selection</h2>
+                            <div class="input-group mb-3">
+                                <label>Jenis Plastik (Resin)</label>
+                                <select id="materialType" onchange="updateMaterialInfo()">
+                                    <option value="PP">Polypropylene (PP) - Easy Flow</option>
+                                    <option value="ABS">ABS - Medium Viscosity</option>
+                                    <option value="PC">Polycarbonate (PC) - Engineering</option>
+                                    <option value="PA6">Nylon (PA6) - Semi-crystalline</option>
+                                </select>
+                            </div>
+                            <div class="bg-slate-900 p-3 rounded border border-slate-700 text-xs grid grid-cols-1 gap-2 shadow-inner">
+                                <div class="flex justify-between border-b border-slate-800 pb-1"><span class="text-slate-400">Rec. Melt Temp:</span> <span id="matMelt" class="font-mono text-blue-300 font-bold"></span></div>
+                                <div class="flex justify-between border-b border-slate-800 pb-1"><span class="text-slate-400">Rec. Mold Temp:</span> <span id="matMold" class="font-mono text-green-300 font-bold"></span></div>
+                                <div class="flex justify-between"><span class="text-slate-400">Shrinkage:</span> <span id="matShrink" class="font-mono text-orange-300 font-bold"></span></div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h2 class="text-xs font-bold text-blue-400 mb-3 border-b border-slate-700 pb-2">Mold & Clamping</h2>
+                            <div class="grid grid-cols-2 gap-3 mb-3">
+                                <div class="input-group"><label>Projected Area (cm²)</label><input type="number" id="projectedArea" value="150" min="10"></div>
+                                <div class="input-group"><label>Jumlah Cavity</label><input type="number" id="cavityCount" value="2" min="1"></div>
+                            </div>
+                            <div class="input-group">
+                                <label>Sistem Runner</label>
+                                <select id="runnerSystem" onchange="toggleRunnerOptions()">
+                                    <option value="cold">Cold Runner (Standar)</option>
+                                    <option value="hot">Hot Runner (Tanpa Sprue)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: Temperatures -->
+                <div id="tab-temp" class="tab-content hidden space-y-6 animate-fade-in">
+                    <!-- Barrel Temp Matrix -->
+                    <div class="bg-slate-900 border border-slate-700 rounded-lg p-3 shadow-inner">
+                        <h3 class="text-xs font-bold text-slate-300 mb-2 uppercase tracking-wider bg-slate-800 py-1 px-2 rounded">TEMPERATURE SET (°C)</h3>
+                        <table class="matrix-table w-full">
+                            <thead>
+                                <tr>
+                                    <th class="w-16">ZONE</th>
+                                    <th>NH2</th><th>NH1</th><th>H5</th><th>H4</th><th>H3</th><th>H2</th><th>H1</th><th>HP (Feed)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="text-center text-[10px] text-slate-400 font-bold">SET<br>(± 5)</td>
+                                    <td><input type="number" id="tNoz2" value="225"></td>
+                                    <td><input type="number" id="tNoz1" value="225"></td>
+                                    <td><input type="number" id="tFront" value="220"></td>
+                                    <td><input type="number" id="tCenter2" value="220"></td>
+                                    <td><input type="number" id="tCenter1" value="210"></td>
+                                    <td><input type="number" id="tRear2" value="200"></td>
+                                    <td><input type="number" id="tRear1" value="190"></td>
+                                    <td><input type="number" id="tFeed" value="50"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- MTC Settings -->
+                    <div class="bg-slate-900 border border-slate-700 rounded-lg p-3 shadow-inner">
+                        <h3 class="text-xs font-bold text-slate-300 mb-2 uppercase tracking-wider bg-slate-800 py-1 px-2 rounded">MOLD TEMPERATURE CONTROL (MTC)</h3>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div class="input-group">
+                                <label>MEDIA MTC</label>
+                                <select id="mtcMedia"><option value="water">Air (Max ~90°C)</option><option value="oil">Oli (Max ~180°C)</option></select>
+                            </div>
+                            <div class="input-group"><label>SUHU CAVITY (FIXED) °C</label><input type="number" id="tMoldFixed" value="45"></div>
+                            <div class="input-group"><label>SUHU CORE (MOVING) °C</label><input type="number" id="tMoldMoving" value="40"></div>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Hot Runner Settings -->
+                    <div id="hrTempPanel" class="hidden bg-slate-900 border border-slate-700 rounded-lg p-3 shadow-inner">
+                        <div class="flex justify-between items-center mb-2 bg-slate-800 py-1 px-2 rounded">
+                            <h3 class="text-xs font-bold text-orange-400 uppercase tracking-wider">HOT RUNNER ZONES (°C)</h3>
+                            <div class="flex items-center gap-2">
+                                <label class="text-[10px] text-slate-400">Total Zones:</label>
+                                <input type="number" id="hrZoneCount" value="4" min="1" max="30" onchange="generateHRMatrix()" class="w-12 bg-slate-950 text-white text-xs px-1 py-0.5 rounded border border-slate-600 text-center">
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto custom-scrollbar pb-2">
+                            <table class="matrix-table w-full min-w-max" id="hrMatrixTable">
+                                <!-- Generated by JS -->
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: Injection & Holding -->
+                <div id="tab-inject" class="tab-content hidden space-y-4 animate-fade-in">
+                    <div class="bg-slate-900 border border-slate-700 rounded-lg p-3 shadow-inner">
+                        <div class="flex justify-between items-center mb-2 bg-slate-800 py-1 px-2 rounded">
+                            <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">INJECTION</h3>
+                            <div class="flex items-center gap-2">
+                                <label class="text-[10px] text-slate-400 font-bold">V/P Switch (mm):</label>
+                                <input type="number" id="vpSwitch" value="10" class="w-16 bg-yellow-900/30 text-yellow-400 text-xs px-1 rounded border border-yellow-700 text-center font-bold outline-none">
+                            </div>
+                        </div>
+                        <table class="matrix-table w-full">
+                            <thead>
+                                <tr>
+                                    <th class="w-20">PARAM</th>
+                                    <th>5th</th><th>4th</th><th>3rd</th><th>2nd</th><th>1st</th>
+                                    <th class="w-16">UNIT</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="text-center text-xs text-blue-400 font-bold">Press (IP)</td>
+                                    <td><input type="number" id="ip5" value="0"></td>
+                                    <td><input type="number" id="ip4" value="0"></td>
+                                    <td><input type="number" id="ip3" value="80"></td>
+                                    <td><input type="number" id="ip2" value="120"></td>
+                                    <td><input type="number" id="ip1" value="90"></td>
+                                    <td class="text-center text-[10px] text-slate-500">Bar</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-center text-xs text-green-400 font-bold">Speed (IV)</td>
+                                    <td><input type="number" id="iv5" value="0"></td>
+                                    <td><input type="number" id="iv4" value="0"></td>
+                                    <td><input type="number" id="iv3" value="30"></td>
+                                    <td><input type="number" id="iv2" value="80"></td>
+                                    <td><input type="number" id="iv1" value="40"></td>
+                                    <td class="text-center text-[10px] text-slate-500">%</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-center text-xs text-purple-400 font-bold">Pos</td>
+                                    <td><input type="number" id="ipos5" value="0"></td>
+                                    <td><input type="number" id="ipos4" value="0"></td>
+                                    <td><input type="number" id="ipos3" value="10"></td> <!-- V/P Switch -->
+                                    <td><input type="number" id="ipos2" value="25"></td>
+                                    <td><input type="number" id="ipos1" value="45"></td>
+                                    <td class="text-center text-[10px] text-slate-500">mm</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="bg-slate-900 border border-slate-700 rounded-lg p-3 shadow-inner">
+                        <h3 class="text-xs font-bold text-slate-300 mb-2 uppercase tracking-wider bg-slate-800 py-1 px-2 rounded">HOLDING</h3>
+                        <table class="matrix-table w-full">
+                            <thead>
+                                <tr>
+                                    <th class="w-20">PARAM</th>
+                                    <th>4th</th><th>3rd</th><th>2nd</th><th>1st</th>
+                                    <th class="w-16">UNIT</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="text-center text-xs text-orange-400 font-bold">Press (HP)</td>
+                                    <td><input type="number" id="hp4" value="0"></td>
+                                    <td><input type="number" id="hp3" value="30"></td>
+                                    <td><input type="number" id="hp2" value="50"></td>
+                                    <td><input type="number" id="hp1" value="70"></td>
+                                    <td class="text-center text-[10px] text-slate-500">Bar</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-center text-xs text-slate-300 font-bold">Time (s)</td>
+                                    <td><input type="number" id="ht4" value="0" step="0.1"></td>
+                                    <td><input type="number" id="ht3" value="1.0" step="0.1"></td>
+                                    <td><input type="number" id="ht2" value="2.0" step="0.1"></td>
+                                    <td><input type="number" id="ht1" value="1.5" step="0.1"></td>
+                                    <td class="text-center text-[10px] text-slate-500">sec</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- TAB 4: Recovery & Timers -->
+                <div id="tab-timer" class="tab-content hidden space-y-4 animate-fade-in">
+                    <div class="bg-slate-900 border border-slate-700 rounded-lg p-3 shadow-inner">
+                        <h3 class="text-xs font-bold text-slate-300 mb-2 uppercase tracking-wider bg-slate-800 py-1 px-2 rounded">RECOVERY (CHARGING) & SUCK BACK</h3>
+                        <table class="matrix-table w-full mb-3">
+                            <thead>
+                                <tr>
+                                    <th class="w-20">PARAM</th>
+                                    <th>3rd</th><th>2nd</th><th>1st</th>
+                                    <th class="w-16">UNIT</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="text-center text-xs text-blue-400 font-bold">RPM (Rot)</td>
+                                    <td><input type="number" id="rpm3" value="40"></td>
+                                    <td><input type="number" id="rpm2" value="80"></td>
+                                    <td><input type="number" id="rpm1" value="60"></td>
+                                    <td class="text-center text-[10px] text-slate-500">%</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-center text-xs text-green-400 font-bold">Back Press</td>
+                                    <td><input type="number" id="bp3" value="5"></td>
+                                    <td><input type="number" id="bp2" value="10"></td>
+                                    <td><input type="number" id="bp1" value="15"></td>
+                                    <td class="text-center text-[10px] text-slate-500">Bar</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-center text-xs text-purple-400 font-bold">Pos</td>
+                                    <td><input type="number" id="cpos3" value="60"></td>
+                                    <td><input type="number" id="cpos2" value="30"></td>
+                                    <td><input type="number" id="cpos1" value="15"></td>
+                                    <td class="text-center text-[10px] text-slate-500">mm</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-slate-950 p-2 border border-slate-800 rounded flex justify-between items-center">
+                                <span class="text-[10px] font-bold text-slate-400">Suck Back 1 (Before)</span>
+                                <div class="flex items-center gap-1"><input type="number" id="sb1" value="0" class="w-12 bg-transparent text-white font-mono text-center border-b border-slate-600 outline-none"><span class="text-[9px] text-slate-500">mm</span></div>
+                            </div>
+                            <div class="bg-slate-950 p-2 border border-slate-800 rounded flex justify-between items-center">
+                                <span class="text-[10px] font-bold text-slate-400">Suck Back 2 (After)</span>
+                                <div class="flex items-center gap-1"><input type="number" id="sb2" value="5" class="w-12 bg-transparent text-white font-mono text-center border-b border-slate-600 outline-none"><span class="text-[9px] text-slate-500">mm</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-slate-900 border border-slate-700 rounded-lg p-3 shadow-inner space-y-2">
+                            <h3 class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-700 pb-1">TIMERS (sec)</h3>
+                            <div class="flex justify-between items-center"><label class="text-[10px] text-slate-400">Cooling Time</label><input type="number" id="coolTime" value="15" step="0.1" class="w-16 bg-slate-950 text-white px-2 py-1 rounded border border-slate-700 text-center font-mono text-xs"></div>
+                            <div class="flex justify-between items-center"><label class="text-[10px] text-slate-400">Interval / Mold Open</label><input type="number" id="intervalTime" value="3" step="0.1" class="w-16 bg-slate-950 text-white px-2 py-1 rounded border border-slate-700 text-center font-mono text-xs"></div>
+                        </div>
+                        <div class="bg-slate-900 border border-slate-700 rounded-lg p-3 shadow-inner flex flex-col justify-center">
+                            <h3 class="text-xs font-bold text-green-400 mb-2 border-b border-slate-700 pb-1">CUSHION SETTING</h3>
+                            <div class="flex justify-between items-center">
+                                <label class="text-[10px] text-slate-400 leading-tight">Target Sisa Material<br>(Sangat penting untuk Hold)</label>
+                                <div class="flex items-end gap-1">
+                                    <input type="number" id="cushion" value="3" step="0.1" class="w-16 bg-green-900/30 text-green-400 px-2 py-1 rounded border border-green-700 text-center font-mono text-sm font-bold outline-none">
+                                    <span class="text-[10px] text-slate-500 mb-1">mm</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </aside>
+
+        <!-- Panel Kanan: Status & Mieruka -->
+        <section class="w-full lg:w-4/12 flex flex-col bg-slate-900 border-l border-slate-700 relative z-10">
+            <div class="p-5 flex-1 overflow-y-auto custom-scrollbar flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-sm font-bold tracking-widest text-slate-300">MIERUKA DASHBOARD</h2>
+                        <button onclick="toggleGlossary()" class="bg-purple-600 hover:bg-purple-500 text-white text-[9px] px-2 py-1 rounded transition border border-purple-400 shadow flex items-center gap-1">
+                            <i class="fas fa-book"></i> Glosarium
+                        </button>
+                    </div>
+                    <div id="statusBadge" class="px-4 py-1 rounded text-xs font-bold bg-slate-700 text-slate-400 border border-slate-600 shadow-inner">STANDBY</div>
+                </div>
+                
+                <div id="resultBox" class="p-5 rounded-xl border-2 border-dashed border-slate-600 bg-slate-800/50 flex-1 flex flex-col items-center justify-center transition-all duration-300 mb-4 shadow-lg">
+                    <div id="initialPrompt" class="text-center">
+                        <i class="fas fa-arrow-left text-4xl text-slate-600 mb-3 block"></i>
+                        <p class="text-slate-400 text-sm">Atur parameter di kiri, lalu tekan <br><b class="text-blue-400">SIMULASIKAN</b></p>
+                    </div>
+                    <div id="defectContainer" class="hidden space-y-3 w-full"></div>
+                    <div id="successContainer" class="hidden text-center">
+                        <i class="fas fa-check-circle text-green-500 text-6xl mb-3 drop-shadow-[0_0_15px_rgba(16,185,129,0.8)]"></i>
+                        <h3 class="font-bold text-green-400 text-xl tracking-wide">PRODUK OK</h3>
+                        <p class="text-xs text-slate-400 mt-2">Parameter Ideal. Tidak terdeteksi cacat kritikal pada parameter dasar.</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 shrink-0">
+                    <div class="bg-slate-800 p-3 rounded-lg border border-slate-700 shadow-inner">
+                        <span class="text-[10px] text-slate-400 uppercase block mb-1">Est. Cycle Time</span>
+                        <div class="flex items-end gap-1"><span id="cycleTimeDisplay" class="font-mono text-xl font-bold text-white">0.0</span><span class="text-xs text-slate-500 mb-0.5">detik</span></div>
+                    </div>
+                    <div class="bg-slate-800 p-3 rounded-lg border border-slate-700 shadow-inner">
+                        <span class="text-[10px] text-slate-400 uppercase block mb-1">Rekomendasi Tonase</span>
+                        <div class="flex items-end gap-1"><span id="tonnageDisplay" class="font-mono text-xl font-bold text-white">0</span><span class="text-xs text-slate-500 mb-0.5">Ton</span></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 3D VIEW ENGINE -->
+    <main id="flowView" class="hidden flex-1 relative w-full bg-slate-950 overflow-hidden">
+        
+        <!-- UI Overlay on 3D Canvas -->
+        <div class="absolute top-4 left-4 z-10 glass-panel p-3 rounded-lg flex flex-col gap-3 w-64 max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <h3 class="text-sm font-bold text-blue-400 border-b border-slate-600 pb-2"><i class="fas fa-cube"></i> 3D Flow Analysis</h3>
+            
+            <div id="step1Controls">
+                <p class="text-[10px] text-slate-300 mb-2 font-bold uppercase tracking-wider">Langkah 1: Desain Produk 3D</p>
+                
+                <div class="mb-3 p-3 bg-blue-900/30 rounded border border-blue-700/50">
+                    <label class="block text-xs font-bold text-blue-300 mb-2"><i class="fas fa-file-import"></i> Import File 3D (.STL / .OBJ)</label>
+                    <input type="file" id="stlUpload" accept=".stl,.obj,.stp,.step" class="block w-full text-[10px] text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-bold file:bg-blue-600 file:text-white cursor-pointer mb-1 outline-none">
+                    <p class="text-[8px] text-blue-200/70 leading-tight">Gunakan format Mesh (.STL / .OBJ) dari software CAD Anda.</p>
+                </div>
+
+                <div class="flex items-center my-2 opacity-50"><div class="flex-grow border-t border-slate-700"></div><span class="px-2 text-[9px] text-slate-500 font-bold uppercase">Atau</span><div class="flex-grow border-t border-slate-700"></div></div>
+
+                <div class="p-3 bg-slate-900 rounded border border-slate-700 relative overflow-hidden group">
+                    <div id="uploadLoading" class="hidden absolute inset-0 bg-slate-900/95 flex-col items-center justify-center z-20">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
+                        <p class="text-[9px] text-blue-400 animate-pulse font-bold text-center px-2">Memproses AI Vision Contour...</p>
+                    </div>
+                    <label class="block text-xs font-bold text-slate-300 mb-2"><i class="fas fa-camera"></i> Auto-Sketch Foto</label>
+                    <input type="file" id="imageUpload" accept="image/*" class="block w-full text-[10px] text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-bold file:bg-slate-700 file:text-white cursor-pointer outline-none">
+                    <p class="text-[8px] text-slate-400 mt-1 leading-tight">Sistem AI akan membaca garis tepi (kontur) pada foto berlatar kontras.</p>
+                </div>
+            </div>
+
+            <div id="step2Controls" class="hidden">
+                <p class="text-[10px] text-slate-300 mb-2">Langkah 2: Tentukan Tebal Part</p>
+                <div class="flex items-center gap-2 mb-2">
+                    <input type="number" id="partThickness" value="10" class="w-full bg-slate-900 border border-slate-700 text-white text-xs px-2 py-1 rounded">
+                    <span class="text-xs text-slate-400">mm</span>
+                </div>
+                <button onclick="extrudeTo3D()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs py-1.5 rounded transition shadow"><i class="fas fa-cubes"></i> Ekstrusi ke 3D</button>
+                <button onclick="reset3D()" class="w-full mt-2 bg-slate-700 hover:bg-slate-600 text-white text-[10px] py-1 rounded transition border border-slate-500">Batal</button>
+            </div>
+
+            <div id="step3Controls" class="hidden">
+                <p class="text-[10px] text-slate-300 mb-2 font-bold uppercase tracking-wider">Langkah 3: Simulasi Aliran</p>
+                <p class="text-[9px] text-yellow-400 bg-yellow-900/30 p-1.5 rounded border border-yellow-700 mb-2"><i class="fas fa-mouse-pointer"></i> Double-Click pada permukaan 3D untuk menempelkan Gate.</p>
+                
+                <div class="bg-slate-900 p-2 rounded mb-2 border border-slate-700 space-y-2">
+                    <p class="text-[10px] text-slate-400 border-b border-slate-800 pb-1 font-bold">Dimensi Gate (mm):</p>
+                    <div class="flex justify-between items-center">
+                        <span class="text-[10px] text-slate-500">Lebar (W)</span>
+                        <input type="number" id="gateWidth" value="5" min="0.5" max="50" step="0.5" class="w-14 bg-slate-950 text-white font-mono font-bold text-xs px-1 py-0.5 rounded border border-slate-600 text-center outline-none focus:border-blue-500" oninput="updateGateSize()">
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-[10px] text-slate-500">Tebal (T)</span>
+                        <input type="number" id="gateThickness" value="2" min="0.1" max="20" step="0.1" class="w-14 bg-slate-950 text-white font-mono font-bold text-xs px-1 py-0.5 rounded border border-slate-600 text-center outline-none focus:border-blue-500" oninput="updateGateSize()">
+                    </div>
+                </div>
+
+                <div class="flex gap-1 mb-2">
+                    <button onclick="toggleWireframe()" class="flex-1 bg-slate-800 border border-slate-600 text-slate-300 text-[9px] py-1 rounded hover:bg-slate-700"><i class="fas fa-border-all"></i> Rangka</button>
+                    <button onclick="resetColors()" class="flex-1 bg-slate-800 border border-slate-600 text-slate-300 text-[9px] py-1 rounded hover:bg-slate-700"><i class="fas fa-magic"></i> Realistis</button>
+                </div>
+
+                <div class="flex justify-between items-center bg-slate-900 px-2 py-1 rounded mb-2 border border-slate-700">
+                    <span class="text-xs text-slate-400">Total Gate:</span>
+                    <span id="gateCount3D" class="font-mono text-white font-bold text-sm">0</span>
+                </div>
+                
+                <!-- Speed Control Slider -->
+                <div class="mb-3 px-1">
+                    <label class="text-[9px] text-slate-400 font-bold mb-1 flex justify-between"><span><i class="fas fa-tachometer-alt"></i> Kecepatan Simulasi</span><span id="speedLabel" class="text-blue-400">1x</span></label>
+                    <input type="range" id="flowSpeed" min="0.1" max="3" step="0.1" value="1" class="w-full accent-blue-500 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" oninput="document.getElementById('speedLabel').innerText = this.value + 'x'">
+                    <div class="flex justify-between text-[8px] text-slate-500 mt-1"><span>Lambat (Detail)</span><span>Cepat</span></div>
+                </div>
+
+                <button onclick="run3DFlow()" id="btnRun3DFlow" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold text-xs py-2 rounded transition shadow-[0_0_10px_rgba(22,163,74,0.5)] opacity-50 cursor-not-allowed" disabled><i class="fas fa-play"></i> RUN 3D FLOW</button>
+                
+                <div class="flex gap-2 mt-2">
+                    <button onclick="reset3D()" class="flex-1 bg-red-900 hover:bg-red-800 text-white text-[10px] py-1 rounded border border-red-700"><i class="fas fa-trash"></i> Reset All</button>
+                    <button onclick="toggleAutoRotate()" id="btnAutoRotate" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white text-[10px] py-1 rounded border border-slate-500 transition"><i class="fas fa-sync-alt"></i> Putar</button>
+                </div>
+            </div>
+            
+            <div id="flowStatusLabel" class="mt-2 text-xs font-mono text-center text-blue-300 hidden">Filling: <span id="fillPercent">0</span>%</div>
+        </div>
+
+        <!-- Instruksi Kamera -->
+        <div class="absolute bottom-4 right-4 z-10 text-[9px] text-slate-500 glass-panel px-3 py-1.5 rounded border border-slate-700/50 text-right">
+            <p><i class="fas fa-mouse"></i> <b>Kiri:</b> Putar (Orbit)</p>
+            <p><i class="fas fa-mouse"></i> <b>Kanan:</b> Geser (Pan)</p>
+            <p><i class="fas fa-mouse"></i> <b>Scroll:</b> Zoom</p>
+        </div>
+
+        <div id="flowLegend" class="absolute bottom-4 left-4 z-10 glass-panel p-3 rounded-lg flex flex-col w-64 hidden transition-opacity duration-300">
+            <h4 class="text-[9px] font-bold text-slate-300 uppercase tracking-wider border-b border-slate-700 pb-1 mb-2"><i class="fas fa-palette mr-1"></i> Legenda Peta Aliran</h4>
+            <div class="h-2 w-full rounded bg-gradient-to-r from-blue-600 via-green-500 to-red-500"></div>
+            <div class="flex justify-between text-[8px] font-bold mt-1 text-slate-400">
+                <span class="text-blue-400">Awal (Panas)</span>
+                <span class="text-red-400">Akhir (Dingin)</span>
+            </div>
+        </div>
+
+        <!-- Kontainer ThreeJS -->
+        <div id="threeContainer" class="w-full h-full cursor-grab active:cursor-grabbing relative">
+            <div id="labelsContainer" class="absolute inset-0 pointer-events-none z-20 overflow-hidden"></div>
+        </div>
+        
+        <!-- Hidden Canvas for OpenCV Image Processing -->
+        <canvas id="hiddenCanvas" class="hidden"></canvas>
+    </main>
+    
+    <!-- Custom Toast Notification -->
+    <div id="toastContainer" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-[999] flex flex-col gap-2"></div>
+
+    <!-- Modal Glosarium Defect -->
+    <div id="glossaryModal" class="hidden fixed inset-0 z-[1000] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+        <div class="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+            <!-- Header Modal -->
+            <div class="flex justify-between items-center bg-slate-800 p-4 border-b border-slate-700">
+                <div>
+                    <h2 class="text-lg font-bold text-purple-400"><i class="fas fa-book-open mr-2"></i> Glosarium & Troubleshooting Defect Injeksi</h2>
+                    <p class="text-[10px] text-slate-400 mt-1">Panduan lengkap analisis cacat plastik, penyebab, dan parameter solusinya.</p>
+                </div>
+                <button onclick="toggleGlossary()" class="text-slate-400 hover:text-white transition bg-slate-700 hover:bg-slate-600 p-2 rounded-full w-8 h-8 flex items-center justify-center"><i class="fas fa-times"></i></button>
+            </div>
+            
+            <!-- Konten Glosarium -->
+            <div class="p-5 overflow-y-auto custom-scrollbar grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                
+                <!-- 1. Sink Mark -->
+                <div class="bg-slate-800 p-4 rounded-lg border-l-4 border-yellow-500 shadow-inner flex flex-col">
+                    <h3 class="font-bold text-yellow-400 mb-1"><i class="fas fa-compress-arrows-alt mr-1"></i> Sink Mark (Cekungan)</h3>
+                    <p class="text-[10px] text-slate-300 mb-3 flex-1">Permukaan produk melesak ke dalam di area yang tebal karena penyusutan material tidak dikompensasi dengan baik.</p>
+                    <div class="bg-slate-950 p-2 rounded text-[9px] space-y-1 border border-slate-700">
+                        <p class="text-green-400"><b>Aksi (+):</b> Naikkan Hold Press, Perpanjang Hold Time, Pastikan Cushion > 0.</p>
+                        <p class="text-red-400"><b>Aksi (-):</b> Turunkan Suhu Melt & Suhu Mold agar cepat beku.</p>
+                    </div>
+                </div>
+
+                <!-- 2. Short Shot -->
+                <div class="bg-slate-800 p-4 rounded-lg border-l-4 border-red-500 shadow-inner flex flex-col">
+                    <h3 class="font-bold text-red-400 mb-1"><i class="fas fa-cut mr-1"></i> Short Shot (Tidak Penuh)</h3>
+                    <p class="text-[10px] text-slate-300 mb-3 flex-1">Plastik membeku sebelum rongga kavitas terisi penuh. Sering terjadi di ujung aliran (End of Fill).</p>
+                    <div class="bg-slate-950 p-2 rounded text-[9px] space-y-1 border border-slate-700">
+                        <p class="text-green-400"><b>Aksi (+):</b> Naikkan Injection Press & Speed, Naikkan Suhu Melt & Mold.</p>
+                        <p class="text-slate-400"><b>Cek Mold:</b> Pastikan lubang gas venting tidak tersumbat.</p>
+                    </div>
+                </div>
+
+                <!-- 3. Flashing -->
+                <div class="bg-slate-800 p-4 rounded-lg border-l-4 border-orange-500 shadow-inner flex flex-col">
+                    <h3 class="font-bold text-orange-400 mb-1"><i class="fas fa-water mr-1"></i> Flashing (Burry / Luber)</h3>
+                    <p class="text-[10px] text-slate-300 mb-3 flex-1">Material merembes keluar dari batas parting line atau celah pin ejektor membentuk selaput tipis.</p>
+                    <div class="bg-slate-950 p-2 rounded text-[9px] space-y-1 border border-slate-700">
+                        <p class="text-green-400"><b>Aksi (+):</b> Naikkan Clamping Force mesin, Majukan V/P Switchover.</p>
+                        <p class="text-red-400"><b>Aksi (-):</b> Turunkan Inj Press & Speed, Turunkan Suhu Melt.</p>
+                    </div>
+                </div>
+
+                <!-- 4. Weld Line -->
+                <div class="bg-slate-800 p-4 rounded-lg border-l-4 border-blue-500 shadow-inner flex flex-col">
+                    <h3 class="font-bold text-blue-400 mb-1"><i class="fas fa-compress mr-1"></i> Weld Line (Garis Pertemuan)</h3>
+                    <p class="text-[10px] text-slate-300 mb-3 flex-1">Garis retakan halus akibat pertemuan dua atau lebih aliran plastik. Area ini lemah dan rawan patah.</p>
+                    <div class="bg-slate-950 p-2 rounded text-[9px] space-y-1 border border-slate-700">
+                        <p class="text-green-400"><b>Aksi (+):</b> Naikkan Suhu Mold & Melt (agar menyatu saat panas), Naikkan Inj Speed.</p>
+                        <p class="text-slate-400"><b>Cek Mold:</b> Pindah posisi Gate menjauhi area berlubang.</p>
+                    </div>
+                </div>
+
+                <!-- 5. Flow Mark -->
+                <div class="bg-slate-800 p-4 rounded-lg border-l-4 border-teal-500 shadow-inner flex flex-col">
+                    <h3 class="font-bold text-teal-400 mb-1"><i class="fas fa-stream mr-1"></i> Flow Mark (Garis Aliran)</h3>
+                    <p class="text-[10px] text-slate-300 mb-3 flex-1">Garis melingkar (gelombang air) di sekitar gate. Terjadi karena plastik terlalu cepat membeku saat masuk kavitas.</p>
+                    <div class="bg-slate-950 p-2 rounded text-[9px] space-y-1 border border-slate-700">
+                        <p class="text-green-400"><b>Aksi (+):</b> Naikkan Injection Speed, Naikkan Suhu Mold & Melt.</p>
+                        <p class="text-slate-400"><b>Cek Mold:</b> Perbesar ukuran Gate atau Cold Slug Well.</p>
+                    </div>
+                </div>
+
+                <!-- 6. Burn Mark -->
+                <div class="bg-slate-800 p-4 rounded-lg border-l-4 border-gray-500 shadow-inner flex flex-col">
+                    <h3 class="font-bold text-gray-400 mb-1"><i class="fas fa-fire-alt mr-1"></i> Burn Mark (Gosong)</h3>
+                    <p class="text-[10px] text-slate-300 mb-3 flex-1">Bercak hitam/hangus pada ujung produk akibat gas terjebak yang terbakar oleh kompresi (Efek Diesel).</p>
+                    <div class="bg-slate-950 p-2 rounded text-[9px] space-y-1 border border-slate-700">
+                        <p class="text-red-400"><b>Aksi (-):</b> Turunkan Inj Speed (tahap akhir), Turunkan Suhu Melt.</p>
+                        <p class="text-slate-400"><b>Cek Mold:</b> Bersihkan kerak pada celah Gas Venting Mold.</p>
+                    </div>
+                </div>
+
+                <!-- 7. Silver Streak -->
+                <div class="bg-slate-800 p-4 rounded-lg border-l-4 border-slate-300 shadow-inner flex flex-col">
+                    <h3 class="font-bold text-slate-200 mb-1"><i class="fas fa-meteor mr-1"></i> Silver Streak (Bercak Perak)</h3>
+                    <p class="text-[10px] text-slate-300 mb-3 flex-1">Bercak keperakan memanjang searah aliran. Akibat material basah (moisture) atau udara terjebak di barrel.</p>
+                    <div class="bg-slate-950 p-2 rounded text-[9px] space-y-1 border border-slate-700">
+                        <p class="text-green-400"><b>Aksi (+):</b> Keringkan resin (Hopper Dryer), Naikkan Back Pressure.</p>
+                        <p class="text-red-400"><b>Aksi (-):</b> Turunkan Screw RPM, Kurangi Suck Back.</p>
+                    </div>
+                </div>
+
+                <!-- 8. Warpage -->
+                <div class="bg-slate-800 p-4 rounded-lg border-l-4 border-purple-500 shadow-inner flex flex-col">
+                    <h3 class="font-bold text-purple-400 mb-1"><i class="fas fa-bezier-curve mr-1"></i> Warpage (Melengkung)</h3>
+                    <p class="text-[10px] text-slate-300 mb-3 flex-1">Produk terdistorsi/melengkung setelah keluar dari mold akibat tegangan sisa atau pendinginan tidak rata.</p>
+                    <div class="bg-slate-950 p-2 rounded text-[9px] space-y-1 border border-slate-700">
+                        <p class="text-green-400"><b>Aksi (+):</b> Perpanjang Cooling Time, Seimbangkan suhu MTC Core & Cavity.</p>
+                        <p class="text-red-400"><b>Aksi (-):</b> Turunkan Holding Pressure (kurangi overpack).</p>
+                    </div>
+                </div>
+                
+                <!-- 9. Jetting -->
+                <div class="bg-slate-800 p-4 rounded-lg border-l-4 border-lime-500 shadow-inner flex flex-col">
+                    <h3 class="font-bold text-lime-400 mb-1"><i class="fas fa-worm mr-1"></i> Jetting (Menyemprot / Cacing)</h3>
+                    <p class="text-[10px] text-slate-300 mb-3 flex-1">Plastik menyemprot bebas ke kavitas membentuk pola ular/cacing tanpa menempel pada dinding mold terlebih dahulu.</p>
+                    <div class="bg-slate-950 p-2 rounded text-[9px] space-y-1 border border-slate-700">
+                        <p class="text-red-400"><b>Aksi (-):</b> Turunkan Injection Speed pada tahap awal (S1) masuk gate.</p>
+                        <p class="text-slate-400"><b>Cek Mold:</b> Perbesar ukuran Gate atau jadikan Overlap Gate.</p>
+                    </div>
+                </div>
+
+                <!-- 10. Vacuum Voids -->
+                <div class="bg-slate-800 p-4 rounded-lg border-l-4 border-cyan-500 shadow-inner flex flex-col">
+                    <h3 class="font-bold text-cyan-400 mb-1"><i class="fas fa-circle-notch mr-1"></i> Vacuum Voids (Gelembung Dalam)</h3>
+                    <p class="text-[10px] text-slate-300 mb-3 flex-1">Gelembung hampa di dalam bagian produk yang tebal. Terjadi karena bagian luar membeku dan menarik bagian tengah.</p>
+                    <div class="bg-slate-950 p-2 rounded text-[9px] space-y-1 border border-slate-700">
+                        <p class="text-green-400"><b>Aksi (+):</b> Naikkan Hold Press & Time untuk memadatkan inti.</p>
+                        <p class="text-red-400"><b>Aksi (-):</b> Turunkan Suhu Melt agar penyusutan tidak ekstrem.</p>
+                    </div>
+                </div>
+
+                <!-- 11. Delamination -->
+                <div class="bg-slate-800 p-4 rounded-lg border-l-4 border-pink-500 shadow-inner flex flex-col">
+                    <h3 class="font-bold text-pink-400 mb-1"><i class="fas fa-layer-group mr-1"></i> Delamination (Terkelupas)</h3>
+                    <p class="text-[10px] text-slate-300 mb-3 flex-1">Permukaan produk mengelupas lapis demi lapis (mika). Mayoritas disebabkan oleh material tercampur plastik jenis lain.</p>
+                    <div class="bg-slate-950 p-2 rounded text-[9px] space-y-1 border border-slate-700">
+                        <p class="text-green-400"><b>Aksi (+):</b> Bersihkan unit Barrel (Purging) menyeluruh.</p>
+                        <p class="text-red-400"><b>Aksi (-):</b> Turunkan Inj Speed kurangi gesekan (shear stress).</p>
+                    </div>
+                </div>
+
+                <!-- 12. Ejector Pin Marks -->
+                <div class="bg-slate-800 p-4 rounded-lg border-l-4 border-emerald-500 shadow-inner flex flex-col">
+                    <h3 class="font-bold text-emerald-400 mb-1"><i class="fas fa-thumbtack mr-1"></i> Ejector Marks (Jejak Pin)</h3>
+                    <p class="text-[10px] text-slate-300 mb-3 flex-1">Bekas putih (Stress Whitening) atau tusukan melesak dari Pin Ejektor. Terjadi saat part masih lembek dikeluarkan.</p>
+                    <div class="bg-slate-950 p-2 rounded text-[9px] space-y-1 border border-slate-700">
+                        <p class="text-green-400"><b>Aksi (+):</b> Perpanjang Cooling Time (tunggu part kaku).</p>
+                        <p class="text-red-400"><b>Aksi (-):</b> Turunkan Hold Press agar produk tidak terlalu seret.</p>
+                    </div>
+                </div>
+                
+                <!-- 13. Stringing / Drooling -->
+                <div class="bg-slate-800 p-4 rounded-lg border-l-4 border-amber-500 shadow-inner flex flex-col">
+                    <h3 class="font-bold text-amber-400 mb-1"><i class="fas fa-tint mr-1"></i> Drooling (Meler / Benang)</h3>
+                    <p class="text-[10px] text-slate-300 mb-3 flex-1">Plastik menetes dari ujung Nozzle atau menarik helaian benang panjang saat Mold terbuka.</p>
+                    <div class="bg-slate-950 p-2 rounded text-[9px] space-y-1 border border-slate-700">
+                        <p class="text-green-400"><b>Aksi (+):</b> Naikkan parameter Suck Back / Dekompresi.</p>
+                        <p class="text-red-400"><b>Aksi (-):</b> Turunkan suhu Nozzle dan Hot Runner (Tip).</p>
+                    </div>
+                </div>
+                
+                <!-- 14. Bubbles / Blisters -->
+                <div class="bg-slate-800 p-4 rounded-lg border-l-4 border-indigo-400 shadow-inner flex flex-col">
+                    <h3 class="font-bold text-indigo-400 mb-1"><i class="fas fa-braille mr-1"></i> Blisters (Lepuh / Bintil)</h3>
+                    <p class="text-[10px] text-slate-300 mb-3 flex-1">Tonjolan kecil pada permukaan produk. Sering terjadi karena gas/udara yang terperangkap mendesak permukaan luar.</p>
+                    <div class="bg-slate-950 p-2 rounded text-[9px] space-y-1 border border-slate-700">
+                        <p class="text-green-400"><b>Aksi (+):</b> Keringkan material (cegah uap air), Naikkan Back Press.</p>
+                        <p class="text-red-400"><b>Aksi (-):</b> Turunkan Suhu Melt agar gas tidak ekspansi berlebih.</p>
+                    </div>
+                </div>
+
+                <!-- 15. Brittleness -->
+                <div class="bg-slate-800 p-4 rounded-lg border-l-4 border-rose-500 shadow-inner flex flex-col">
+                    <h3 class="font-bold text-rose-400 mb-1"><i class="fas fa-heart-broken mr-1"></i> Brittleness (Rapuh / Getas)</h3>
+                    <p class="text-[10px] text-slate-300 mb-3 flex-1">Produk mudah patah atau retak. Terjadi karena degradasi polimer (rantai kimia rusak) atau pencampuran material *regrind* terlalu banyak.</p>
+                    <div class="bg-slate-950 p-2 rounded text-[9px] space-y-1 border border-slate-700">
+                        <p class="text-red-400"><b>Aksi (-):</b> Turunkan Suhu Melt, Turunkan Screw RPM (cegah gesekan berlebih).</p>
+                        <p class="text-slate-400"><b>Cek Lain:</b> Kurangi persentase bahan daur ulang (crushing).</p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. DATA & STATE MANAGEMENT
+        // ==========================================
+        const materialDb = {
+            'PP': { melt: [200, 240], mold: [20, 60], shrink: "1.2 - 2.0%" },
+            'ABS': { melt: [220, 260], mold: [40, 80], shrink: "0.4 - 0.7%" },
+            'PC': { melt: [280, 320], mold: [80, 120], shrink: "0.5 - 0.7%" },
+            'PA6': { melt: [240, 280], mold: [60, 100], shrink: "1.0 - 1.5%" }
+        };
+
+        let totalShots = 0;
+        let simulationCalculated = false; 
+        let flowCapacityGlobal = 0; 
+        let currentDefectsGlobal = []; 
+        let currentView = 'param'; 
+
+        // Three.js State
+        let scene, camera, renderer, controls;
+        let moldMesh = null; 
+        let gates3D = []; 
+        let defectMarkers3D = [];
+        let defectLabels3D = []; 
+        let isAutoRotating = false; 
+        let flowAnimationId = null;
+        let baseMaterialStyle = null;
+
+        window.onload = function() {
+            updateMaterialInfo();
+            generateHRMatrix();
+            init3D(); 
+        };
+
+        // Custom Toast Function to replace alert()
+        function showToast(message, type="info") {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            
+            let bgClass = "bg-slate-800 border-slate-600 text-white";
+            let icon = "<i class='fas fa-info-circle text-blue-400'></i>";
+            if(type === "error") { bgClass = "bg-red-900 border-red-500 text-white"; icon = "<i class='fas fa-times-circle text-red-300'></i>"; }
+            else if(type === "success") { bgClass = "bg-green-900 border-green-500 text-white"; icon = "<i class='fas fa-check-circle text-green-300'></i>"; }
+            else if(type === "warning") { bgClass = "bg-yellow-900 border-yellow-500 text-white"; icon = "<i class='fas fa-exclamation-triangle text-yellow-300'></i>"; }
+
+            toast.className = `flex items-center gap-3 px-4 py-2 rounded shadow-2xl border text-xs font-bold animate-fade-in ${bgClass}`;
+            toast.innerHTML = `${icon} <span>${message}</span>`;
+            
+            container.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(-10px)'; toast.style.transition = 'all 0.3s'; setTimeout(() => toast.remove(), 300); }, 4000);
+        }
+
+        function toggleGlossary() {
+            const modal = document.getElementById('glossaryModal');
+            if (modal.classList.contains('hidden')) {
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        // ==========================================
+        // 2. FUNGSI UI & PARAMETER (TAB VIEW)
+        // ==========================================
+        function toggleView(view) {
+            currentView = view;
+            const btnParam = document.getElementById('btnViewParam');
+            const btnFlow = document.getElementById('btnViewFlow');
+            const viewParam = document.getElementById('paramView');
+            const viewFlow = document.getElementById('flowView');
+
+            if (view === 'param') {
+                btnParam.className = 'px-4 py-1.5 rounded text-xs font-bold bg-blue-600 text-white shadow';
+                btnFlow.className = 'px-4 py-1.5 rounded text-xs font-bold text-slate-400 hover:text-white transition-colors';
+                viewParam.classList.remove('hidden');
+                viewFlow.classList.add('hidden');
+            } else {
+                if (!simulationCalculated) {
+                    showToast("Harap 'Simulasikan' Parameter di Dashboard utama terlebih dahulu untuk mengkalkulasi viskositas material.", "warning");
+                    return; 
+                }
+                
+                btnFlow.className = 'px-4 py-1.5 rounded text-xs font-bold bg-blue-600 text-white shadow';
+                btnParam.className = 'px-4 py-1.5 rounded text-xs font-bold text-slate-400 hover:text-white transition-colors';
+                viewParam.classList.add('hidden');
+                viewFlow.classList.remove('hidden');
+                
+                if(renderer && camera) {
+                    const cont = document.getElementById('threeContainer');
+                    camera.aspect = cont.clientWidth / cont.clientHeight;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(cont.clientWidth, cont.clientHeight);
+                }
+            }
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(tabId).classList.remove('hidden');
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+        }
+
+        function updateMaterialInfo() {
+            const mat = document.getElementById('materialType').value;
+            const data = materialDb[mat];
+            document.getElementById('matMelt').innerText = `${data.melt[0]} - ${data.melt[1]} °C`;
+            document.getElementById('matMold').innerText = `${data.mold[0]} - ${data.mold[1]} °C`;
+            document.getElementById('matShrink').innerText = data.shrink;
+        }
+
+        function toggleRunnerOptions() {
+            const runner = document.getElementById('runnerSystem').value;
+            if (runner === 'hot') {
+                document.getElementById('hrTempPanel').classList.remove('hidden');
+                generateHRMatrix();
+            } else {
+                document.getElementById('hrTempPanel').classList.add('hidden');
+            }
+        }
+
+        function generateHRMatrix() {
+            const countInput = document.getElementById('hrZoneCount');
+            if(!countInput) return;
+            const count = Math.min(30, Math.max(1, parseInt(countInput.value) || 4));
+            const container = document.getElementById('hrMatrixTable');
+            const defaultTemp = document.getElementById('tFront').value || 220;
+            
+            let headerHTML = '<thead><tr><th class="w-16">ZONE</th>';
+            let rowHTML = '<tbody><tr><td class="text-center text-[10px] text-slate-400 font-bold">SET<br>(± 5)</td>';
+            
+            for(let i = count; i >= 1; i--) {
+                headerHTML += `<th>HR${i}</th>`;
+                rowHTML += `<td><input type="number" id="hr_temp_${i}" value="${defaultTemp}"></td>`;
+            }
+            
+            headerHTML += '</tr></thead>';
+            rowHTML += '</tr></tbody>';
+            
+            container.innerHTML = headerHTML + rowHTML;
+        }
+
+        // ==========================================
+        // 3. LOGIKA EVALUASI (SIMULATOR CORE) 
+        // ==========================================
+        function runSimulation() {
+            totalShots++;
+            document.getElementById('shotCounter').innerText = totalShots;
+
+            const getVal = (id) => parseFloat(document.getElementById(id)?.value) || 0;
+
+            const matType = document.getElementById('materialType').value;
+            const mat = materialDb[matType];
+            const runner = document.getElementById('runnerSystem').value;
+            const mtcMedia = document.getElementById('mtcMedia').value;
+            
+            // Pengambilan Nilai Parameter (Membaca input dari matriks tabel baru)
+            const tFront = getVal('tFront');
+            // Rata-rata suhu barrel (mengambil sampel titik depan, tengah, belakang)
+            const avgMelt = (getVal('tRear1') + getVal('tCenter1') + tFront + getVal('tNoz1')) / 4; 
+            const tMoldFixed = getVal('tMoldFixed');
+            const tMoldMoving = getVal('tMoldMoving');
+            const avgMold = (tMoldFixed + tMoldMoving) / 2;
+            
+            // Cari nilai tekanan/speed terbesar dari matriks 5 stage Injeksi
+            const maxInjPress = Math.max(getVal('ip1'), getVal('ip2'), getVal('ip3'), getVal('ip4'), getVal('ip5'));
+            const maxInjSpd = Math.max(getVal('iv1'), getVal('iv2'), getVal('iv3'), getVal('iv4'), getVal('iv5'));
+            
+            // Cari nilai terbesar dari matriks 4 stage Holding
+            const maxHoldPress = Math.max(getVal('hp1'), getVal('hp2'), getVal('hp3'), getVal('hp4'));
+            const holdTimeTotal = getVal('ht1') + getVal('ht2') + getVal('ht3') + getVal('ht4');
+            
+            const cushion = getVal('cushion');
+            const coolTime = getVal('coolTime');
+            const intervalTime = getVal('intervalTime');
+            
+            const projArea = getVal('projectedArea');
+            const cavCount = getVal('cavityCount') || 1;
+            
+            // Tonase Calculation
+            let tonnageFactor = 0.45;
+            if (maxInjPress > 120) tonnageFactor = 0.55; 
+            const tonnageCalc = Math.ceil(projArea * cavCount * tonnageFactor * 1.2); 
+            
+            // Cycle Time = Inj Time Est + Hold Time + Cool Time + Recovery(suckback/open)
+            const injTimeEst = 2.0; 
+            const totalCycle = (injTimeEst + holdTimeTotal + coolTime + intervalTime + 2.0).toFixed(1);
+
+            document.getElementById('tonnageDisplay').innerText = tonnageCalc;
+            document.getElementById('cycleTimeDisplay').innerText = totalCycle;
+
+            let defects = [];
+            let warnings = []; 
+
+            // Evaluasi Logic
+            if (mtcMedia === 'water' && (tMoldFixed > 90 || tMoldMoving > 90)) defects.push({ name: "MTC Error", cause: "Media Air mendidih di atas 90°C. Gunakan media Oli."});
+            if (tMoldMoving >= tMoldFixed) defects.push({ name: "Part Sticking", cause: "Suhu Core (Moving) harus lebih dingin dari Cavity agar part tidak nyangkut saat mold buka."});
+            
+            if (avgMold > mat.mold[1] + 15) defects.push({ name: "Warping (Melengkung)", cause: "Suhu Mold ekstrem panas. Part belum mengeras sempurna."});
+            if (avgMold < mat.mold[0] - 10) defects.push({ name: "Flow Mark / Short Shot", cause: "Mold terlalu dingin, plastik prematur membeku di dinding kavitas."});
+
+            if (avgMelt > mat.melt[1] + 20) defects.push({ name: "Gas Burn / Flashing", cause: "Suhu leleh sangat tinggi, viskositas rusak dan material terdegradasi (gosong)."});
+            if (avgMelt < mat.melt[0] - 15) defects.push({ name: "Short Shot / Unmelt", cause: "Suhu Barrel terlalu dingin, plastik belum meleleh sempurna."});
+
+            if (maxInjPress < 50) defects.push({ name: "Short Shot", cause: "Tekanan Injeksi (Bar) kurang kuat untuk mengisi penuh rongga."});
+            if (maxInjPress > 140 && maxInjSpd > 80) defects.push({ name: "Flashing (Luber)", cause: "Overpack! Tekanan/Kecepatan terlalu ekstrem, mold terbuka paksa."});
+
+            if (cushion <= 0) defects.push({ name: "Sink Mark (Cekungan)", cause: "Cushion 0 mm. Tekanan Holding gagal disalurkan ke produk (mentok di ujung barrel)."});
+            if (maxHoldPress > 0 && maxHoldPress < 30) defects.push({ name: "Sink Mark", cause: "Holding Pressure terlalu rendah, penyusutan plastik tidak terkompensasi."});
+            if (coolTime < 6) defects.push({ name: "Ejector Pin Marks", cause: "Pendinginan terlalu singkat, part masih lembek tertusuk pin."});
+
+            // Evaluasi Hot Runner
+            if (runner === 'hot') {
+                const hrCount = parseInt(document.getElementById('hrZoneCount').value) || 0;
+                let coldZ = 0, hotZ = 0;
+                for (let i = 1; i <= hrCount; i++) {
+                    const hrInput = document.getElementById('hr_temp_' + i);
+                    if(hrInput) {
+                        const hrT = parseFloat(hrInput.value) || 0;
+                        if (hrT < mat.melt[0] - 15) coldZ++;
+                        if (hrT > mat.melt[1] + 20) hotZ++;
+                    }
+                }
+                if (coldZ > 0) defects.push({ name: "Blocked Gate (Hot Runner)", cause: `${coldZ} zona HR membeku (Cold Slug). Tidak bisa injeksi.`});
+                if (hotZ > 0) defects.push({ name: "Material Degradation", cause: `${hotZ} zona HR overheat (Gosong).`});
+            }
+
+            currentDefectsGlobal = defects;
+            renderMierukaResult(defects, warnings);
+
+            // Flow Capacity untuk 3D (Seberapa jauh aliran bisa mengalir sebelum membeku)
+            if (defects.length === 0) {
+                simulationCalculated = true;
+                flowCapacityGlobal = 1.0; 
+            } else {
+                const hasShortShot = defects.some(d => d.name.includes("Short Shot") || d.name.includes("Blocked") || d.name.includes("Unmelt"));
+                if(hasShortShot) {
+                    simulationCalculated = true;
+                    let cap = 0.8;
+                    if (maxInjPress < 50) cap = maxInjPress / 100;
+                    if (avgMelt < mat.melt[0]) cap -= 0.3;
+                    flowCapacityGlobal = Math.max(0.1, cap); 
+                } else {
+                    simulationCalculated = true;
+                    flowCapacityGlobal = 1.0; 
+                }
+            }
+        }
+
+        function renderMierukaResult(defects, warnings) {
+            document.getElementById('initialPrompt').classList.add('hidden');
+            const box = document.getElementById('resultBox');
+            const badge = document.getElementById('statusBadge');
+            const defContainer = document.getElementById('defectContainer');
+            const sucContainer = document.getElementById('successContainer');
+            
+            box.style.transform = 'scale(0.97)';
+            box.style.opacity = '0.7';
+            setTimeout(() => { box.style.transform = 'scale(1)'; box.style.opacity = '1'; }, 150);
+            
+            box.className = 'p-5 rounded-xl border-2 border-dashed flex-1 flex flex-col transition-all duration-300 mb-4 shadow-lg';
+            badge.className = 'px-4 py-1 rounded text-xs font-bold shadow-inner border';
+            defContainer.innerHTML = '';
+            
+            if (defects.length > 0) {
+                box.classList.add('mieruka-ng', 'border-red-600', 'justify-start');
+                badge.innerText = "ABNORMAL (NG)"; badge.classList.add('bg-red-900', 'text-red-400', 'border-red-500');
+                sucContainer.classList.add('hidden'); defContainer.classList.remove('hidden');
+                
+                defects.forEach(d => {
+                    defContainer.innerHTML += `<div class="bg-red-950/80 border border-red-800 rounded-lg p-3 text-left shadow"><span class="font-bold text-red-400 text-sm block mb-1"><i class="fas fa-times-circle mr-1"></i> ${d.name}</span><p class="text-[11px] text-red-200 leading-tight">${d.cause}</p></div>`;
+                });
+            } else if (warnings.length > 0) {
+                box.classList.add('mieruka-warn', 'border-yellow-600', 'justify-start');
+                badge.innerText = "WARNING"; badge.classList.add('bg-yellow-900', 'text-yellow-400', 'border-yellow-500');
+                sucContainer.classList.add('hidden'); defContainer.classList.remove('hidden');
+                
+                warnings.forEach(w => {
+                    defContainer.innerHTML += `<div class="bg-yellow-950/80 border border-yellow-800 rounded-lg p-3 text-left shadow"><span class="font-bold text-yellow-400 text-sm block mb-1"><i class="fas fa-exclamation-triangle mr-1"></i> ${w.name}</span><p class="text-[11px] text-yellow-200 leading-tight">${w.cause}</p></div>`;
+                });
+            } else {
+                box.classList.add('mieruka-ok', 'border-green-600', 'items-center', 'justify-center');
+                badge.innerText = "NORMAL (OPTIMAL)"; badge.classList.add('bg-green-900', 'text-green-400', 'border-green-500');
+                defContainer.classList.add('hidden'); sucContainer.classList.remove('hidden');
+            }
+        }
+
+        // ==========================================
+        // 4. LOGIKA 3D FLOW ENGINE (THREE.JS)
+        // ==========================================
+        function init3D() {
+            const container = document.getElementById('threeContainer');
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0f1d); 
+            
+            const gridHelper = new THREE.GridHelper(300, 60, 0x334155, 0x1e293b);
+            scene.add(gridHelper);
+
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 2000);
+            camera.position.set(0, 150, 200);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // optimize performance
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+
+            // Pencahayaan Realistis
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambientLight);
+            
+            const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x444444, 0.6 );
+            hemiLight.position.set( 0, 200, 0 );
+            scene.add( hemiLight );
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(100, 200, 100);
+            dirLight.castShadow = true;
+            dirLight.shadow.camera.top = 150; dirLight.shadow.camera.bottom = -150;
+            dirLight.shadow.camera.left = -150; dirLight.shadow.camera.right = 150;
+            scene.add(dirLight);
+
+            const backLight = new THREE.DirectionalLight(0xaabbff, 0.3);
+            backLight.position.set(-100, 50, -100);
+            scene.add(backLight);
+
+            window.addEventListener('resize', () => {
+                if(currentView === 'flow' && renderer && camera) {
+                    const cont = document.getElementById('threeContainer');
+                    camera.aspect = cont.clientWidth / cont.clientHeight;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(cont.clientWidth, cont.clientHeight);
+                }
+            });
+
+            // Gate Placement Logic via Raycaster
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2();
+            
+            renderer.domElement.addEventListener('dblclick', (e) => {
+                if (!moldMesh) return; 
+                
+                const rect = renderer.domElement.getBoundingClientRect();
+                mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObject(moldMesh);
+
+                if (intersects.length > 0) {
+                    const intersect = intersects[0];
+                    // Ambil arah kemiringan permukaan (Face Normal) untuk orientasi Gate
+                    let normal = intersect.face.normal.clone();
+                    // Konversi normal lokal ke normal dunia (World Space)
+                    const normalMatrix = new THREE.Matrix3().getNormalMatrix(moldMesh.matrixWorld);
+                    normal.applyMatrix3(normalMatrix).normalize();
+                    
+                    addGate3D(intersect.point, normal);
+                }
+            });
+
+            animate3D();
+        }
+
+        function animate3D() {
+            requestAnimationFrame(animate3D);
+            controls.update();
+            
+            const time = Date.now() * 0.005;
+
+            <!-- Animasi Label HTML menempel ke titik 3D -->
+            if (defectLabels3D && defectLabels3D.length > 0) {
+                const container = document.getElementById('threeContainer');
+                const hw = container.clientWidth / 2;
+                const hh = container.clientHeight / 2;
+                
+                defectLabels3D.forEach((obj, idx) => {
+                    const marker3D = defectMarkers3D[idx];
+                    if (!marker3D) return;
+
+                    marker3D.position.y = marker3D.userData.basePos.y + Math.sin(time + idx) * 1.5;
+                    
+                    const pos = marker3D.position.clone();
+                    pos.project(camera); 
+                    
+                    if (pos.z > 1) {
+                        obj.element.style.display = 'none';
+                        return;
+                    }
+                    
+                    const x = (pos.x * hw) + hw;
+                    const y = -(pos.y * hh) + hh;
+                    
+                    obj.element.style.display = 'block';
+                    obj.element.style.left = `${x}px`;
+                    obj.element.style.top = `${y - 12}px`; 
+                    obj.element.style.transform = `translate(-50%, -100%)`;
+                });
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // --- 4.1 IMPORT FILE 3D ---
+        document.getElementById('stlUpload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const extension = file.name.split('.').pop().toLowerCase();
+
+            // PENCEGAHAN FORMAT STP/STEP UNTUK WEB BROWSER
+            if (extension === 'stp' || extension === 'step') {
+                showToast("Format STEP (.stp) berbasis NURBS terlalu berat untuk WebGL. Harap 'Save As' atau 'Export' produk Anda menjadi format .STL atau .OBJ dari software CAD.", "warning");
+                e.target.value = ''; // Reset input
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    reset3D(); // Bersihkan sisa sebelumnya
+
+                    let geometry;
+
+                    if (extension === 'stl') {
+                        const loader = new THREE.STLLoader();
+                        geometry = loader.parse(event.target.result);
+                    } else if (extension === 'obj') {
+                        const loader = new THREE.OBJLoader();
+                        // OBJ menggunakan format teks
+                        const objText = new TextDecoder("utf-8").decode(event.target.result);
+                        const object = loader.parse(objText);
+                        
+                        // Ekstrak geometry dari mesh pertama yang ditemukan di dalam file OBJ
+                        object.traverse((child) => {
+                            if (child.isMesh && !geometry) {
+                                geometry = child.geometry;
+                            }
+                        });
+                        
+                        if(!geometry) throw new Error("Tidak ada objek 3D di dalam file OBJ ini.");
+                    } else {
+                        throw new Error("Format file tidak didukung.");
+                    }
+                    
+                    // Vertex Colors (wajib untuk simulasi warna flow/heatmap)
+                    const count = geometry.attributes.position.count;
+                    const colorArr = new Float32Array(count * 3);
+                    for(let i=0; i<count; i++) { colorArr[i*3] = 0.8; colorArr[i*3+1] = 0.8; colorArr[i*3+2] = 0.85; } // Natural Light Grey
+                    geometry.setAttribute('color', new THREE.BufferAttribute(colorArr, 3));
+
+                    // Normalize Ukuran Bounding Box ke center (Karena beda software beda skala ekspor)
+                    geometry.computeBoundingBox();
+                    const bbox = geometry.boundingBox;
+                    const center = new THREE.Vector3();
+                    bbox.getCenter(center);
+                    geometry.translate(-center.x, -center.y, -center.z);
+
+                    const size = bbox.getSize(new THREE.Vector3());
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    const scaleFactor = 150 / maxDim; // Paksa masuk ke area pandang 150 unit
+                    geometry.scale(scaleFactor, scaleFactor, scaleFactor);
+                    geometry.computeVertexNormals();
+
+                    applyPBRMaterialAndRender(geometry);
+
+                    // Skip langkah Extrude (karena sudah berbentuk 3D asli)
+                    document.getElementById('step1Controls').classList.add('hidden');
+                    document.getElementById('step2Controls').classList.add('hidden'); 
+                    document.getElementById('step3Controls').classList.remove('hidden');
+                    document.getElementById('flowLegend').classList.remove('hidden');
+                    
+                    showToast("File 3D (.STL) berhasil di-import!", "success");
+
+                } catch(err) {
+                    console.error(err);
+                    showToast("Gagal membaca file STL. Pastikan format 3D valid.", "error");
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        function applyPBRMaterialAndRender(geometry) {
+            // Material Realistis (Physically Based Rendering)
+            baseMaterialStyle = new THREE.MeshPhysicalMaterial({
+                vertexColors: true,     
+                metalness: 0.1,         // Plastik mengkilap bukan logam
+                roughness: 0.15,        
+                clearcoat: 1.0,         // Pantulan lingkungan (Glossy)
+                clearcoatRoughness: 0.1,
+                side: THREE.DoubleSide,
+                polygonOffset: true,
+                polygonOffsetFactor: 1, 
+                polygonOffsetUnits: 1
+            });
+
+            moldMesh = new THREE.Mesh(geometry, baseMaterialStyle);
+            moldMesh.castShadow = true;
+            moldMesh.receiveShadow = true;
+            
+            // Putar agar rebah (Extrude 2D biasanya butuh diputar)
+            if(geometry.type === 'ExtrudeGeometry') moldMesh.rotation.x = -Math.PI / 2;
+
+            scene.add(moldMesh);
+
+            // Auto frame camera
+            moldMesh.geometry.computeBoundingBox();
+            const bbox = moldMesh.geometry.boundingBox;
+            const sizeBox = Math.max(bbox.max.x - bbox.min.x, bbox.max.y - bbox.min.y, bbox.max.z - bbox.min.z);
+            camera.position.set(sizeBox * 0.8, sizeBox, sizeBox * 0.8);
+            controls.target.set(0,0,0);
+        }
+
+        // --- 4.2 AI VISION (AUTO-SKETCH FOTO) ---
+        let detectedPoints = [];
+        let autoHoles = [];
+
+        document.getElementById('imageUpload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const loadingUI = document.getElementById('uploadLoading');
+            loadingUI.classList.remove('hidden');
+            loadingUI.classList.add('flex');
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    try {
+                        processImageToContour(img);
+                        
+                        setTimeout(() => {
+                            loadingUI.classList.add('hidden');
+                            loadingUI.classList.remove('flex');
+                            if(detectedPoints.length > 3) {
+                                document.getElementById('step1Controls').classList.add('hidden');
+                                document.getElementById('step2Controls').classList.remove('hidden');
+                                showToast("Sketsa kontur otomatis berhasil di-generate!", "success");
+                            } else {
+                                showToast("Gagal mendeteksi kontur. Pastikan foto memiliki kontras background yang jelas.", "error");
+                            }
+                        }, 1000); // Fake delay for UI feedback
+                    } catch (err) {
+                        console.error(err);
+                        loadingUI.classList.add('hidden');
+                        loadingUI.classList.remove('flex');
+                        showToast("Terjadi kesalahan saat memproses gambar.", "error");
+                    }
+                }
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function processImageToContour(img) {
+            const canvas = document.getElementById('hiddenCanvas');
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            
+            // Resize kecil untuk kecepatan komputasi
+            const MAX_SIZE = 150; 
+            let scale = Math.min(MAX_SIZE / img.width, MAX_SIZE / img.height);
+            canvas.width = img.width * scale;
+            canvas.height = img.height * scale;
+            
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imgData.data;
+            
+            // 1. Grayscale & Thresholding (Binarization)
+            const threshold = 128;
+            const grid = [];
+            for (let y = 0; y < canvas.height; y++) {
+                grid[y] = [];
+                for (let x = 0; x < canvas.width; x++) {
+                    const i = (y * canvas.width + x) * 4;
+                    const brightness = (data[i] + data[i+1] + data[i+2]) / 3;
+                    // Benda diasumsikan lebih gelap/terang dari background, kita buat benda = 1, bg = 0
+                    // Deteksi pixel tengah sebagai acuan warna objek
+                    grid[y][x] = brightness < threshold ? 1 : 0; 
+                }
+            }
+            
+            // 2. Simple Radial Edge Detection (Mencari batas dari titik tengah ke luar)
+            // Ini adalah pendekatan aman pengganti Moore-Neighbor yang rawan infinite loop
+            const cx = Math.floor(canvas.width / 2);
+            const cy = Math.floor(canvas.height / 2);
+            let rawPoints = [];
+            
+            for (let angle = 0; angle < 360; angle += 4) { // Scan setiap 4 derajat
+                const rad = angle * Math.PI / 180;
+                const dx = Math.cos(rad);
+                const dy = Math.sin(rad);
+                
+                let edgeFound = false;
+                for (let r = 5; r < MAX_SIZE; r++) {
+                    const x = Math.floor(cx + dx * r);
+                    const y = Math.floor(cy + dy * r);
+                    
+                    if (x <= 0 || x >= canvas.width - 1 || y <= 0 || y >= canvas.height - 1) {
+                        rawPoints.push(new THREE.Vector2(x, y));
+                        edgeFound = true;
+                        break;
+                    }
+                    
+                    // Transisi warna (tepi benda)
+                    if (grid[y][x] !== grid[y][x+1]) {
+                        rawPoints.push(new THREE.Vector2(x, y));
+                        edgeFound = true;
+                        break;
+                    }
+                }
+            }
+
+            if(rawPoints.length < 3) return;
+
+            // Pusatkan koordinat
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            rawPoints.forEach(p => {
+                if(p.x < minX) minX = p.x; if(p.x > maxX) maxX = p.x;
+                if(p.y < minY) minY = p.y; if(p.y > maxY) maxY = p.y;
+            });
+            const boundCx = (minX + maxX) / 2;
+            const boundCy = (minY + maxY) / 2;
+
+            detectedPoints = rawPoints.map(p => new THREE.Vector2(p.x - boundCx, p.y - boundCy));
+            
+            // Simulasi deteksi 1 lubang statis (jika objek terlihat lebar)
+            autoHoles = [];
+            if (maxX - minX > 50 && maxY - minY > 50) {
+                const hole = [];
+                const radius = 10;
+                for(let i=0; i<360; i+=20) {
+                    hole.push(new THREE.Vector2(Math.cos(i * Math.PI/180) * radius, Math.sin(i * Math.PI/180) * radius));
+                }
+                autoHoles.push(hole);
+            }
+        }
+
+        // --- 4.3 EKSTRUSI HASIL AI 2D KE 3D ---
+        function extrudeTo3D() {
+            if (detectedPoints.length < 3) return;
+            
+            try {
+                reset3D(); // Bersihkan existing
+                
+                const thickness = parseFloat(document.getElementById('partThickness').value) || 10;
+                const shape = new THREE.Shape(detectedPoints);
+                
+                // Tambahkan lubang
+                autoHoles.forEach(hPts => {
+                    const holePath = new THREE.Path(hPts);
+                    shape.holes.push(holePath);
+                });
+
+                const extrudeSettings = {
+                    depth: thickness,
+                    bevelEnabled: true,
+                    bevelSegments: 2,
+                    steps: 2,
+                    bevelSize: 1,
+                    bevelThickness: 1
+                };
+
+                const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+                
+                // Set warna dasar
+                const count = geometry.attributes.position.count;
+                const colorArr = new Float32Array(count * 3);
+                for(let i=0; i<count; i++) { colorArr[i*3] = 0.8; colorArr[i*3+1] = 0.8; colorArr[i*3+2] = 0.85; }
+                geometry.setAttribute('color', new THREE.BufferAttribute(colorArr, 3));
+                
+                geometry.computeBoundingBox();
+                const center = new THREE.Vector3();
+                geometry.boundingBox.getCenter(center);
+                geometry.translate(-center.x, -center.y, -center.z); // Center geometry
+
+                applyPBRMaterialAndRender(geometry);
+
+                document.getElementById('step2Controls').classList.add('hidden');
+                document.getElementById('step3Controls').classList.remove('hidden');
+                document.getElementById('flowLegend').classList.remove('hidden');
+            } catch(e) {
+                console.error("Extrusion Error:", e);
+                showToast("Gagal membentuk 3D. Bentuk foto terlalu rumit atau terputus.", "error");
+            }
+        }
+
+        // --- 4.4 GATE & FLOW SIMULATION ---
+        function addGate3D(intersectPoint, normal) {
+            const w = parseFloat(document.getElementById('gateWidth').value) || 5;
+            const t = parseFloat(document.getElementById('gateThickness').value) || 2;
+            
+            // Gunakan BoxGeometry (Balok) agar merepresentasikan dimensi Lebar x Tebal
+            const gateGeo = new THREE.BoxGeometry(1, 1, 1);
+            // Geser titik tengah (pivot) ke ujung Z (0.5) agar gate tidak menembus/tenggelam ke dalam produk
+            gateGeo.translate(0, 0, 0.5); 
+            
+            const gateMat = new THREE.MeshBasicMaterial({ color: 0xf97316 }); 
+            const gate = new THREE.Mesh(gateGeo, gateMat);
+            
+            // X = Lebar (W), Y = Tebal (T), Z = Panjang visual runner menonjol (Misal disetel ke 5mm)
+            gate.scale.set(w, t, 5);
+            gate.position.copy(intersectPoint);
+            
+            // Arahkan gate tegak lurus dengan permukaan produk (menjauh keluar searah Normal)
+            if (normal) {
+                const target = intersectPoint.clone().add(normal);
+                gate.lookAt(target);
+            }
+
+            scene.add(gate);
+            gates3D.push(gate);
+            
+            document.getElementById('gateCount3D').innerText = gates3D.length;
+            document.getElementById('btnRun3DFlow').disabled = false;
+            document.getElementById('btnRun3DFlow').classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+
+        function updateGateSize() {
+            const w = parseFloat(document.getElementById('gateWidth').value) || 5;
+            const t = parseFloat(document.getElementById('gateThickness').value) || 2;
+            // Update ukuran Lebar (X) & Tebal (Y) pada semua gate di layar secara realtime
+            gates3D.forEach(gate => {
+                gate.scale.set(w, t, 5);
+            });
+        }
+
+        function toggleWireframe() {
+            if(!moldMesh) return;
+            moldMesh.material.wireframe = !moldMesh.material.wireframe;
+        }
+
+        function resetColors() {
+            if(!moldMesh) return;
+            const colors = moldMesh.geometry.attributes.color;
+            const count = colors.count;
+            for(let i=0; i<count; i++) { colors.setXYZ(i, 0.8, 0.8, 0.85); }
+            colors.needsUpdate = true;
+            
+            if(flowAnimationId) cancelAnimationFrame(flowAnimationId);
+            defectMarkers3D.forEach(m => scene.remove(m));
+            defectMarkers3D = [];
+            document.getElementById('labelsContainer').innerHTML = '';
+            defectLabels3D = [];
+            document.getElementById('flowStatusLabel').classList.add('hidden');
+        }
+
+        function toggleAutoRotate() {
+            isAutoRotating = !isAutoRotating;
+            controls.autoRotate = isAutoRotating;
+            controls.autoRotateSpeed = 2.5; 
+            
+            const btn = document.getElementById('btnAutoRotate');
+            if (isAutoRotating) {
+                btn.innerHTML = '<i class="fas fa-pause"></i> Stop';
+                btn.classList.replace('bg-slate-700', 'bg-blue-700');
+            } else {
+                btn.innerHTML = '<i class="fas fa-sync-alt"></i> Putar';
+                btn.classList.replace('bg-blue-700', 'bg-slate-700');
+            }
+        }
+
+        function reset3D() {
+            if(moldMesh) scene.remove(moldMesh);
+            gates3D.forEach(g => scene.remove(g));
+            gates3D = [];
+            moldMesh = null;
+            detectedPoints = [];
+            autoHoles = [];
+            
+            defectMarkers3D.forEach(m => scene.remove(m));
+            defectMarkers3D = [];
+            document.getElementById('labelsContainer').innerHTML = '';
+            defectLabels3D = [];
+
+            document.getElementById('step3Controls').classList.add('hidden');
+            document.getElementById('step2Controls').classList.add('hidden');
+            document.getElementById('step1Controls').classList.remove('hidden');
+            document.getElementById('btnRun3DFlow').disabled = true;
+            document.getElementById('btnRun3DFlow').classList.add('opacity-50', 'cursor-not-allowed');
+            document.getElementById('flowStatusLabel').classList.add('hidden');
+            document.getElementById('flowLegend').classList.add('hidden');
+        }
+
+        function run3DFlow() {
+            if(!moldMesh || gates3D.length === 0) return;
+            if(flowAnimationId) cancelAnimationFrame(flowAnimationId);
+            
+            defectMarkers3D.forEach(m => scene.remove(m));
+            defectMarkers3D = [];
+            document.getElementById('labelsContainer').innerHTML = '';
+            defectLabels3D = [];
+
+            document.getElementById('flowStatusLabel').classList.remove('hidden');
+            const fillLabel = document.getElementById('fillPercent');
+            
+            const capacity = flowCapacityGlobal || 1.0; 
+            const positions = moldMesh.geometry.attributes.position;
+            const colors = moldMesh.geometry.attributes.color;
+            const vertexCount = positions.count;
+
+            // Reset base color ke abu-abu gelap agar kontras dengan warna aliran
+            for(let i=0; i<vertexCount; i++) { colors.setXYZ(i, 0.2, 0.25, 0.35); }
+            colors.needsUpdate = true;
+
+            const localGates = gates3D.map(g => {
+                const vec = g.position.clone();
+                moldMesh.worldToLocal(vec);
+                return vec;
+            });
+
+            moldMesh.geometry.computeBoundingBox();
+            const bbox = moldMesh.geometry.boundingBox;
+            const diag = bbox.min.distanceTo(bbox.max);
+            
+            let currentFlowRadius = 0;
+            const targetRadius = diag * capacity; 
+            
+            // Slider Kecepatan
+            const speedMultiplier = parseFloat(document.getElementById('flowSpeed').value) || 1.0;
+            const speed = diag * 0.005 * speedMultiplier; 
+            
+            let lastFilledVertices = [];
+            let weldLineAreas = [];
+            
+            // Array untuk caching jarak tempuh agar menghindari perhitungan raycast berulang
+            const distCache = new Float32Array(vertexCount).fill(Infinity);
+            
+            // Raycaster internal (Untuk Topologi Objek / Mendeteksi halangan lubang)
+            const raycaster = new THREE.Raycaster();
+
+            function animateFlow() {
+                currentFlowRadius += speed;
+                let filledVertices = 0;
+                lastFilledVertices = []; 
+
+                for (let i = 0; i < vertexCount; i++) {
+                    const vPos = new THREE.Vector3(positions.getX(i), positions.getY(i), positions.getZ(i));
+                    
+                    let effectiveDist = distCache[i];
+
+                    // Jika belum dihitung, hitung jarak efektif dari Gate (menggunakan Raycast untuk mengecek rintangan/lubang)
+                    if (effectiveDist === Infinity) {
+                        let minDist1 = Infinity;
+                        let minDist2 = Infinity;
+                        
+                        for(let g of localGates) {
+                            const rawDist = vPos.distanceTo(g);
+                            let penalty = 0;
+
+                            // TOPOLOGICAL OBSTACLE CHECK: Jika aliran harus melewati lubang, jarak akan diperjauh (penalty)
+                            if (autoHoles.length > 0 || moldMesh.geometry.type === 'ExtrudeGeometry') {
+                                // Tembakkan ray dari Gate ke Titik Vertex
+                                const direction = new THREE.Vector3().subVectors(vPos, g).normalize();
+                                // Ubah sementara menjadi mode double side raycast
+                                raycaster.set(g, direction);
+                                const intersects = raycaster.intersectObject(moldMesh);
+                                
+                                // Jika ray menabrak > 2 muka/faces (berarti tembus lubang) sebelum mencapai jarak aslinya
+                                if (intersects.length > 2 && intersects[1].distance < rawDist) {
+                                    penalty = rawDist * 0.5; // Perlambat aliran di belakang lubang (Bayangan Aliran)
+                                }
+                            }
+                            
+                            const finalDist = rawDist + penalty;
+                            
+                            if(finalDist < minDist1) { minDist2 = minDist1; minDist1 = finalDist; } 
+                            else if (finalDist < minDist2) { minDist2 = finalDist; }
+                        }
+                        
+                        effectiveDist = minDist1;
+                        distCache[i] = effectiveDist;
+                        
+                        // Deteksi Weld Line (Pertemuan aliran) di belakang lubang atau dari 2 gate berbeda
+                        // Kondisi: ada jarak yang mirip dari 2 sumber, dan jaraknya cukup jauh
+                        if (minDist2 !== Infinity && Math.abs(minDist1 - minDist2) < (diag*0.05) && minDist1 > (diag*0.1)) {
+                            if(Math.random() < 0.02) weldLineAreas.push(vPos.clone()); 
+                        }
+                    }
+
+                    // Pewarnaan Flow
+                    if (effectiveDist <= currentFlowRadius) {
+                        filledVertices++;
+                        const heatRatio = effectiveDist / diag; 
+                        const color = new THREE.Color();
+                        color.setHSL((1 - heatRatio) * 0.6, 1.0, 0.5); 
+                        colors.setXYZ(i, color.r, color.g, color.b);
+                        
+                        if (currentFlowRadius - effectiveDist < speed * 2) {
+                            lastFilledVertices.push(vPos.clone());
+                        }
+                    }
+                }
+                
+                colors.needsUpdate = true;
+                const percent = Math.min(100, Math.round((filledVertices / vertexCount) * 100));
+                fillLabel.innerText = percent;
+
+                if (currentFlowRadius < targetRadius && percent < 100) {
+                    flowAnimationId = requestAnimationFrame(animateFlow);
+                } else {
+                    if (capacity < 1.0) { fillLabel.innerText = percent + "% (Short Shot!)"; fillLabel.classList.replace('text-blue-300', 'text-red-400'); } 
+                    else { fillLabel.innerText = "100% (Filled)"; fillLabel.classList.replace('text-red-400', 'text-green-400'); }
+                    
+                    analyzeAndShowDefects(lastFilledVertices, weldLineAreas);
+                }
+            }
+            
+            animateFlow();
+        }
+
+        function analyzeAndShowDefects(lastFilled, weldLines) {
+            const createMarker = (position, colorHex, labelTitle, labelDesc) => {
+                const worldPos = position.clone();
+                moldMesh.localToWorld(worldPos);
+
+                const geo = new THREE.SphereGeometry(2.5, 8, 8);
+                const mat = new THREE.MeshBasicMaterial({ color: colorHex, wireframe: true });
+                const solidSphere = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 16), new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.6 }));
+                
+                const marker = new THREE.Mesh(geo, mat);
+                marker.add(solidSphere);
+                marker.position.copy(worldPos);
+                marker.position.y += 2; marker.position.z += 2; 
+                marker.userData.basePos = marker.position.clone(); 
+                
+                scene.add(marker);
+                defectMarkers3D.push(marker);
+                
+                const labelDiv = document.createElement('div');
+                labelDiv.className = `absolute top-0 left-0 bg-slate-900/95 border border-slate-600 rounded p-2 shadow-2xl backdrop-blur-sm z-50`;
+                labelDiv.style.borderLeftColor = `#${colorHex.toString(16).padStart(6, '0')}`;
+                labelDiv.style.borderLeftWidth = '4px';
+                labelDiv.innerHTML = `<div class="text-[11px] font-bold text-white mb-0.5 whitespace-nowrap">${labelTitle}</div><div class="text-[9px] text-slate-300 max-w-[130px] leading-tight">${labelDesc}</div><div class="absolute left-1/2 -bottom-[6px] w-3 h-3 transform -translate-x-1/2 rotate-45 bg-slate-900 border-b border-r border-slate-600"></div>`;
+                
+                document.getElementById('labelsContainer').appendChild(labelDiv);
+                defectLabels3D.push({ pos3D: marker.position, element: labelDiv });
+            };
+
+            const hasSinkMark = currentDefectsGlobal.some(d => d.name.includes("Sink Marks") || d.name.includes("Cushion"));
+            
+            if (lastFilled.length > 0) {
+                let targetIdx = Math.floor(lastFilled.length / 2);
+                if (hasSinkMark) createMarker(lastFilled[targetIdx], 0xffff00, "⚠️ Potensi Sink Mark", "Holding kurang padat di ujung aliran ini.");
+                else if (flowCapacityGlobal < 1.0) createMarker(lastFilled[targetIdx], 0xff0000, "❌ Short Shot", "Aliran plastik terhenti prematur.");
+                else createMarker(lastFilled[targetIdx], 0xa855f7, "💨 Ujung Aliran / Air Trap", "Area terakhir terisi. Pastikan ada ventilasi (Gas Vent).");
+            }
+
+            if (weldLines.length > 0) {
+                // Pilih titik yang paling representatif
+                let repIdx = Math.floor(weldLines.length / 2);
+                createMarker(weldLines[repIdx], 0x3b82f6, "⚡ Garis Las (Weld Line)", "Pertemuan 2 arah aliran plastik (akibat rintangan/lubang).");
+                
+                // Tambahkan peringatan ke UI Panel kiri
+                const warnBox = document.getElementById('defectContainer');
+                if (warnBox.classList.contains('hidden') || !warnBox.innerHTML.includes("Weld Line")) {
+                    document.getElementById('successContainer').classList.add('hidden');
+                    warnBox.classList.remove('hidden');
+                    document.getElementById('resultBox').className = 'p-5 rounded-xl border-2 border-dashed flex-1 flex flex-col transition-all duration-300 mb-4 shadow-lg mieruka-warn border-yellow-600 justify-start';
+                    document.getElementById('statusBadge').className = 'px-4 py-1 rounded text-xs font-bold shadow-inner border bg-yellow-900 text-yellow-400 border-yellow-500';
+                    document.getElementById('statusBadge').innerText = "WARNING (DEFECT 3D)";
+                    
+                    warnBox.innerHTML += `<div class="bg-yellow-950/80 border border-yellow-800 rounded-lg p-3 text-left shadow mt-2"><span class="font-bold text-yellow-400 text-sm block mb-1"><i class="fas fa-exclamation-triangle mr-1"></i> Analisis Topologi: Weld Line</span><p class="text-[11px] text-yellow-200 leading-tight">Terdeteksi garis pertemuan aliran pada simulasi 3D akibat bentuk lubang atau pemakaian multi-gate.</p></div>`;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
